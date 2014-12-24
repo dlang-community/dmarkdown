@@ -1,0 +1,16 @@
+{
+    "name": "dmarkdown",
+    "description": "Markdown to HTML processor",
+    "copyright": "Copyright © 2012-2014 rejectedsoftware e.K.",
+    "authors": ["Sönke Ludwig", "Martin Nowak", "Mike Wey", "cybevnm"],
+    "importPaths": ["source"],
+    "license": "MIT",
+    "homepage": "https://github.com/kiith-sa/dmarkdown",
+
+    "buildTypes":
+    {
+        "debug": { "buildOptions": ["debugMode", "debugInfoC"] },
+        "release": { "buildOptions": ["releaseMode", "optimize", "inline", "noBoundsCheck"] },
+        "profile": { "buildOptions": ["releaseMode", "optimize", "noBoundsCheck", "debugInfoC"] },
+    },
+}
