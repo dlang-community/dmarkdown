@@ -108,7 +108,7 @@ Credits
 -------
 
 DMarkdown code was written as a part of the `vibe.d <http://vibed.org/>`_ project by
-rejectedsoftware e.K.
+rejectedsoftware e.K. . Modifications by Ferdinand Majerech.
 
 See more `D <http://www.dlang.org>`_ libraries and projects at `code.dlang.org
 <http://code.dlang.org>`_.
