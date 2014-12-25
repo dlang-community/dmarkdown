@@ -10,8 +10,6 @@ module dmarkdown.markdown;
 import dmarkdown.html;
 import dmarkdown.string;
 
-// import vibe.utils.string;
-
 import std.algorithm : canFind, countUntil, min;
 import std.array;
 import std.ascii : isAlpha, isWhite;
@@ -40,10 +38,12 @@ unittest
 	    "  * a\n"
 	    "  * b\n"
 	    "  * c\n";
-	string result = filterMarkdown(text);
+
 	import std.stdio;
-	foreach( ln; splitLines(result) )
-		writeln(ln);
+	writeln("===========");
+	writeln(text);
+	writeln("===========");
+	writeln(filterMarkdown(text));
 }
 
 unittest
