@@ -3,6 +3,9 @@ DMarkdown
 =========
 
 
+.. image:: https://api.travis-ci.org/kiith-sa/dmarkdown.svg
+
+
 ------------
 Introduction
 ------------
