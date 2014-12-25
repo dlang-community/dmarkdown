@@ -208,6 +208,23 @@ private struct Block {
 	string[] text;
 	Block[] blocks;
 	size_t headerLevel;
+
+	// A human-readable toString for debugging.
+	string toString()
+	{
+		return toStringNested;
+	}
+
+	// toString implementation; capable of indenting nested blocks.
+	string toStringNested(uint depth = 0)
+	{
+		import std.conv: to;
+		string indent = " ".repeat(depth * 2).joiner.array.to!string;
+		return indent ~ "%s\n".format(type) ~
+		       indent ~ "%s\n".format(text) ~
+		       blocks.map!((ref b) => b.toStringNested(depth + 1)).joiner.array.to!string ~
+		       indent ~ "%s\n".format(headerLevel);
+	}
 }
 
 private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_indent, scope MarkdownSettings settings)
