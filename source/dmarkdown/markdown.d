@@ -46,6 +46,19 @@ unittest
 		writeln(ln);
 }
 
+unittest
+{
+	auto source =
+`Merged prototype. The prototype is not locked, allowing to add more components.
+        To be used it must be locked by calling EntityPrototype.lockAndTrimMemory().`;
+	auto expected =
+`<p>Merged prototype. The prototype is not locked, allowing to add more components.
+        To be used it must be locked by calling EntityPrototype.lockAndTrimMemory().
+</p>
+`;
+	string result = filterMarkdown(source);
+	assert(result == expected);
+}
 
 /** Returns a Markdown filtered HTML string.
 */
@@ -369,7 +382,18 @@ private string[] skipText(ref Line[] lines, IndentType[] indent)
 pure @safe {
 	static bool matchesIndent(IndentType[] indent, IndentType[] base_indent)
 	{
-		if( indent.length > base_indent.length ) return false;
+		// Any *plain* line with a higher indent should still be a part of
+		// a paragraph read by skipText(). Returning false here resulted in
+		// text such as:
+		// ---
+		// First line
+		//         Second line
+		// ---
+		// being interpreted as a paragraph followed by a code block, even though
+		// other Markdown processors would interpret it as a single paragraph.
+
+		// if( indent.length > base_indent.length ) return false;
+		if( indent.length > base_indent.length ) return true;
 		if( indent != base_indent[0 .. indent.length] ) return false;
 		sizediff_t qidx = -1;
 		foreach_reverse (i, tp; base_indent) if (tp == IndentType.Quote) { qidx = i; break; }
