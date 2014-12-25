@@ -111,6 +111,8 @@ enum MarkdownFlags {
 	noInlineHtml = 1<<2,
 	//noLinks = 1<<3,
 	//allowUnsafeHtml = 1<<4,
+	/// If used, subheadings are underlined by stars ('*') instead of dashes ('-')
+	alternateSubheaders = 1 << 5, 
 	vanillaMarkdown = none,
 	forumDefault = keepLineBreaks|backtickCodeBlocks|noInlineHtml
 }
@@ -165,6 +167,7 @@ private struct Line {
 private Line[] parseLines(ref string[] lines, scope MarkdownSettings settings)
 pure @safe {
 	Line[] ret;
+	const subHeaderChar = settings.flags * MarkdownFlags.alternateSubheaders ? '*' : '-';
 	while( !lines.empty ){
 		auto ln = lines.front;
 		lines.popFront();
@@ -191,7 +194,7 @@ pure @safe {
 
 		if( (settings.flags & MarkdownFlags.backtickCodeBlocks) && isCodeBlockDelimiter(ln) ) lninfo.type = LineType.CodeBlockDelimiter;
 		else if( isAtxHeaderLine(ln) ) lninfo.type = LineType.AtxHeader;
-		else if( isSetextHeaderLine(ln) ) lninfo.type = LineType.SetextHeader;
+		else if( isSetextHeaderLine(ln, subHeaderChar) ) lninfo.type = LineType.SetextHeader;
 		else if( isHlineLine(ln) ) lninfo.type = LineType.Hline;
 		else if( isOListLine(ln) ) lninfo.type = LineType.OList;
 		else if( isUListLine(ln) ) lninfo.type = LineType.UList;
@@ -622,7 +625,7 @@ pure @safe {
 	return allOf(ln, " \t");
 }
 
-private bool isSetextHeaderLine(string ln)
+private bool isSetextHeaderLine(string ln, char subHeaderChar)
 pure @safe {
 	ln = stripLeft(ln);
 	if( ln.length < 1 ) return false;
@@ -630,8 +633,8 @@ pure @safe {
 		while(!ln.empty && ln.front == '=') ln.popFront();
 		return allOf(ln, " \t");
 	}
-	if( ln[0] == '-' ){
-		while(!ln.empty && ln.front == '-') ln.popFront();
+	if( ln[0] == subHeaderChar ){
+		while(!ln.empty && ln.front == subHeaderChar) ln.popFront();
 		return allOf(ln, " \t");
 	}
 	return false;
