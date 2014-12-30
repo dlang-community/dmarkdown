@@ -4,7 +4,7 @@ DMarkdown
 
 
 .. image:: https://api.travis-ci.org/kiith-sa/dmarkdown.svg
-.. image:: code.dlang.org-shield.svg
+.. image:: https://raw.githubusercontent.com/kiith-sa/dmarkdown/master/code.dlang.org-shield.svg
    :target: http://code.dlang.org
 
 
