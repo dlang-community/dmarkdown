@@ -60,6 +60,25 @@ unittest
 	assert(result == expected);
 }
 
+unittest 
+{
+    auto source = `*stars* under_score_s`;
+    auto expectedUnderscores   = `<p><em>stars</em> under<em>score</em>s
+</p>
+`;
+    auto expectedNoUnderscores = `<p><em>stars</em> under_score_s
+</p>
+`;
+
+    string resultUnderscores = filterMarkdown(source);
+    string resultNoUnderscores = filterMarkdown(source, MarkdownFlags.disableUnderscoreEmphasis);
+
+    assert(resultUnderscores == expectedUnderscores, 
+           "'%s' != '%s'".format(resultUnderscores, expectedUnderscores));
+    assert(resultNoUnderscores == expectedNoUnderscores,
+           "'%s' != '%s'".format(resultNoUnderscores, expectedNoUnderscores));
+}
+
 /** Returns a Markdown filtered HTML string.
 */
 string filterMarkdown()(string str, MarkdownFlags flags)
@@ -149,7 +168,9 @@ enum MarkdownFlags {
 	//noLinks = 1<<3,
 	//allowUnsafeHtml = 1<<4,
 	/// If used, subheadings are underlined by stars ('*') instead of dashes ('-')
-	alternateSubheaders = 1 << 5, 
+	alternateSubheaders = 1 << 5,
+	/// If used, '_' may not be used for emphasis ('*' may still be used)
+	disableUnderscoreEmphasis = 1 << 6,
 	vanillaMarkdown = none,
 	forumDefault = keepLineBreaks|backtickCodeBlocks|noInlineHtml
 }
@@ -573,6 +594,13 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				}
 				break;
 			case '_':
+				if(settings.flags & MarkdownFlags.disableUnderscoreEmphasis)
+				{
+					dst.put(ln[0]);
+					ln = ln[1 .. $];
+					break;
+				}
+				goto case;
 			case '*':
 				string text;
 				if( auto em = parseEmphasis(ln, text) ){
