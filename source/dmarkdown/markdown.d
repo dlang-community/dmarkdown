@@ -10,7 +10,9 @@ module dmarkdown.markdown;
 import dmarkdown.html;
 import dmarkdown.string;
 
-import std.algorithm : canFind, countUntil, min;
+import std.algorithm.searching : canFind, countUntil;
+import std.algorithm.iteration : joiner, map, filter;
+import std.algorithm.comparison : min;
 import std.array;
 import std.ascii : isAlpha, isWhite;
 import std.format;
