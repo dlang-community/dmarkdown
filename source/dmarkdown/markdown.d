@@ -477,7 +477,7 @@ pure @safe {
 	}
 }
 
-/// private
+// private
 private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] links, scope MarkdownSettings settings)
 {
 	final switch(block.type){
@@ -566,7 +566,7 @@ private void writeMarkdownEscaped(R)(ref R dst, ref const Block block, in LinkRe
 	if (lines.length) dst.put("\n");
 }
 
-/// private
+// private
 private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] linkrefs, scope MarkdownSettings settings)
 {
 	bool br = ln.endsWith("  ");

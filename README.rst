@@ -55,7 +55,9 @@ to the ``"dependencies"`` in your project's ``dub.json``/``package.json``.
 
 
 To see API details, see the `dmarkdown.markdown
-<https://github.com/kiith-sa/dmarkdown/blob/master/source/dmarkdown/markdown.d>`_ module.
+<https://github.com/kiith-sa/dmarkdown/blob/master/source/dmarkdown/markdown.d>`_ module 
+and the (incomplete) `API documentation <http://ddocs.org/dmarkdown/~master/index.html>`_
+at `DDocs.org <http://ddocs.org>`_.
 
 .. Add this section when there's something to talk about
 .. --------
