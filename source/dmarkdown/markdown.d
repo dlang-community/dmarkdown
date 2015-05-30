@@ -10,7 +10,7 @@ module dmarkdown.markdown;
 import dmarkdown.html;
 import dmarkdown.string;
 
-import std.algorithm : canFind, countUntil, min;
+import std.algorithm : joiner, map, canFind, countUntil, min;
 import std.array;
 import std.ascii : isAlpha, isWhite;
 import std.format;
@@ -144,6 +144,7 @@ unittest
 	    "AAAAAAAAAA"
 	    "</code></pre>";
 
+	import std.algorithm: filter;
 	string processCode(string input) @safe nothrow
 	{
 		import std.conv;
