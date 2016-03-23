@@ -107,8 +107,7 @@ void filterMarkdown(R)(ref R dst, string src, MarkdownFlags flags)
 /// ditto
 void filterMarkdown(R)(ref R dst, string src, scope MarkdownSettings settings = null)
 {
-	auto defsettings = new MarkdownSettings;
-	if (!settings) settings = defsettings;
+	if (!settings) settings = new MarkdownSettings;
 
 	auto all_lines = splitLines(src);
 	auto links = scanForReferences(all_lines);
@@ -118,9 +117,60 @@ void filterMarkdown(R)(ref R dst, string src, scope MarkdownSettings settings = 
 	writeBlock(dst, root_block, links, settings);
 }
 
+/**
+	Returns the hierarchy of sections
+*/
+Section[] getMarkdownOutline(string markdown_source, scope MarkdownSettings settings = null)
+{
+	import std.conv : to;
+
+	if (!settings) settings = new MarkdownSettings;
+	auto all_lines = splitLines(markdown_source);
+	auto lines = parseLines(all_lines, settings);
+	Block root_block;
+	parseBlocks(root_block, lines, null, settings);
+	Section root;
+
+	foreach (ref sb; root_block.blocks) {
+		if (sb.type == BlockType.Header) {
+			auto s = &root;
+			while (true) {
+				if (s.subSections.length == 0) break;
+				if (s.subSections[$-1].headingLevel >= sb.headerLevel) break;
+				s = &s.subSections[$-1];
+			}
+			s.subSections ~= Section(sb.headerLevel, sb.text[0], sb.text[0].asSlug.to!string);
+		}
+	}
+
+	return root.subSections;
+}
+
+///
+unittest {
+	import std.conv : to;
+	assert(getMarkdownOutline("## first\n## second\n### third\n# fourth\n### fifth") ==
+		[
+			Section(2, " first", "first"),
+			Section(2, " second", "second", [
+				Section(3, " third", "third")
+			]),
+			Section(1, " fourth", "fourth", [
+				Section(3, " fifth", "fifth")
+			])
+		]
+	);
+}
+
 final class MarkdownSettings {
+	/// Controls the capabilities of the parser.
 	MarkdownFlags flags = MarkdownFlags.vanillaMarkdown;
+
+	/// Heading tags will start at this level.
 	size_t headingBaseLevel = 1;
+
+	/// Called for every link/image URL to perform arbitrary transformations.
+	string delegate(string url_or_path, bool is_image) urlFilter;
 
 	/** An optional delegate to post-process code blocks and inline code.
 	 *
@@ -174,6 +224,13 @@ enum MarkdownFlags {
 	disableUnderscoreEmphasis = 1 << 6,
 	vanillaMarkdown = none,
 	forumDefault = keepLineBreaks|backtickCodeBlocks|noInlineHtml
+}
+
+struct Section {
+	size_t headingLevel;
+	string caption;
+	string anchor;
+	Section[] subSections;
 }
 
 private {
@@ -477,7 +534,7 @@ pure @safe {
 	}
 }
 
-// private
+/// private
 private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] links, scope MarkdownSettings settings)
 {
 	final switch(block.type){
@@ -503,7 +560,7 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 		case BlockType.Header:
 			assert(block.blocks.length == 0);
 			auto hlvl = block.headerLevel + (settings ? settings.headingBaseLevel-1 : 0);
-			dst.formattedWrite("<h%s>", hlvl);
+			dst.formattedWrite("<h%s id=\"%s\">", hlvl, block.text[0].asSlug);
 			assert(block.text.length == 1);
 			writeMarkdownEscaped(dst, block.text[0], links, settings);
 			dst.formattedWrite("</h%s>\n", hlvl);
@@ -566,9 +623,13 @@ private void writeMarkdownEscaped(R)(ref R dst, ref const Block block, in LinkRe
 	if (lines.length) dst.put("\n");
 }
 
-// private
+/// private
 private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] linkrefs, scope MarkdownSettings settings)
 {
+	string filterLink(string lnk, bool is_image) {
+		return settings.urlFilter ? settings.urlFilter(lnk, is_image) : lnk;
+	}
+
 	bool br = ln.endsWith("  ");
 	while( ln.length > 0 ){
 		switch( ln[0] ){
@@ -637,7 +698,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				Link link;
 				if( parseLink(ln, link, linkrefs) ){
 					dst.put("<a href=\"");
-					filterHTMLAttribEscape(dst, link.url);
+					filterHTMLAttribEscape(dst, filterLink(link.url, false));
 					dst.put("\"");
 					if( link.title.length ){
 						dst.put(" title=\"");
@@ -656,7 +717,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				Link link;
 				if( parseLink(ln, link, linkrefs) ){
 					dst.put("<img src=\"");
-					filterHTMLAttribEscape(dst, link.url);
+					filterHTMLAttribEscape(dst, filterLink(link.url, true));
 					dst.put("\" alt=\"");
 					filterHTMLAttribEscape(dst, link.text);
 					dst.put("\"");
@@ -685,7 +746,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 					bool is_email = url.startsWith("mailto:");
 					dst.put("<a href=\"");
 					if( is_email ) filterHTMLAllEscape(dst, url);
-					else filterHTMLAttribEscape(dst, url);
+					else filterHTMLAttribEscape(dst, filterLink(url, false));
 					dst.put("\">");
 					if( is_email ) filterHTMLAllEscape(dst, url[7 .. $]);
 					else filterHTMLEscape(dst, url, HTMLEscapeFlags.escapeMinimal);
@@ -975,48 +1036,48 @@ pure @safe {
 
 @safe unittest
 {
-    static void testLink(string s, Link exp, in LinkRef[string] refs)
-    {
-        Link link;
-        assert(parseLink(s, link, refs), s);
-        assert(link == exp);
-    }
-    LinkRef[string] refs;
-    refs["ref"] = LinkRef("ref", "target", "title");
+	static void testLink(string s, Link exp, in LinkRef[string] refs)
+	{
+		Link link;
+		assert(parseLink(s, link, refs), s);
+		assert(link == exp);
+	}
+	LinkRef[string] refs;
+	refs["ref"] = LinkRef("ref", "target", "title");
 
-    testLink(`[link](target)`, Link("link", "target"), null);
-    testLink(`[link](target "title")`, Link("link", "target", "title"), null);
-    testLink(`[link](target  "title")`, Link("link", "target", "title"), null);
-    testLink(`[link](target "title"  )`, Link("link", "target", "title"), null);
+	testLink(`[link](target)`, Link("link", "target"), null);
+	testLink(`[link](target "title")`, Link("link", "target", "title"), null);
+	testLink(`[link](target  "title")`, Link("link", "target", "title"), null);
+	testLink(`[link](target "title"  )`, Link("link", "target", "title"), null);
 
-    testLink(`[link](target)`, Link("link", "target"), null);
-    testLink(`[link](target "title")`, Link("link", "target", "title"), null);
+	testLink(`[link](target)`, Link("link", "target"), null);
+	testLink(`[link](target "title")`, Link("link", "target", "title"), null);
 
-    testLink(`[link][ref]`, Link("link", "target", "title"), refs);
-    testLink(`[ref][]`, Link("ref", "target", "title"), refs);
+	testLink(`[link][ref]`, Link("link", "target", "title"), refs);
+	testLink(`[ref][]`, Link("ref", "target", "title"), refs);
 
-    testLink(`[link[with brackets]](target)`, Link("link[with brackets]", "target"), null);
-    testLink(`[link[with brackets]][ref]`, Link("link[with brackets]", "target", "title"), refs);
+	testLink(`[link[with brackets]](target)`, Link("link[with brackets]", "target"), null);
+	testLink(`[link[with brackets]][ref]`, Link("link[with brackets]", "target", "title"), refs);
 
-    testLink(`[link](/target with spaces )`, Link("link", "/target with spaces"), null);
-    testLink(`[link](/target with spaces "title")`, Link("link", "/target with spaces", "title"), null);
+	testLink(`[link](/target with spaces )`, Link("link", "/target with spaces"), null);
+	testLink(`[link](/target with spaces "title")`, Link("link", "/target with spaces", "title"), null);
 
-    testLink(`[link](white-space  "around title" )`, Link("link", "white-space", "around title"), null);
-    testLink(`[link](tabs	"around title"	)`, Link("link", "tabs", "around title"), null);
+	testLink(`[link](white-space  "around title" )`, Link("link", "white-space", "around title"), null);
+	testLink(`[link](tabs	"around title"	)`, Link("link", "tabs", "around title"), null);
 
-    testLink(`[link](target "")`, Link("link", "target", ""), null);
-    testLink(`[link](target-no-title"foo" )`, Link("link", "target-no-title\"foo\"", ""), null);
+	testLink(`[link](target "")`, Link("link", "target", ""), null);
+	testLink(`[link](target-no-title"foo" )`, Link("link", "target-no-title\"foo\"", ""), null);
 
-    testLink(`[link](<target>)`, Link("link", "target"), null);
+	testLink(`[link](<target>)`, Link("link", "target"), null);
 
-    auto failing = [
-        `text`, `[link](target`, `[link]target)`, `[link]`,
-        `[link(target)`, `link](target)`, `[link] (target)`,
-        `[link][noref]`, `[noref][]`
-    ];
-    Link link;
-    foreach (s; failing)
-        assert(!parseLink(s, link, refs), s);
+	auto failing = [
+		`text`, `[link](target`, `[link]target)`, `[link]`,
+		`[link(target)`, `link](target)`, `[link] (target)`,
+		`[link][noref]`, `[noref][]`
+	];
+	Link link;
+	foreach (s; failing)
+		assert(!parseLink(s, link, refs), s);
 }
 
 private bool parseAutoLink(ref string str, ref string url)
@@ -1103,6 +1164,82 @@ pure @safe {
 	return ret;
 }
 
+
+/**
+	Generates an identifier suitable to use as within a URL.
+
+	The resulting string will contain only ASCII lower case alphabetic or
+	numeric characters, as well as dashes (-). Every sequence of
+	non-alphanumeric characters will be replaced by a single dash. No dashes
+	will be at either the front or the back of the result string.
+*/
+auto asSlug(R)(R text)
+	if (isInputRange!R && is(typeof(R.init.front) == dchar))
+{
+	static struct SlugRange {
+		private {
+			R _input;
+			bool _dash;
+		}
+
+		this(R input)
+		{
+			_input = input;
+			skipNonAlphaNum();
+		}
+
+		@property bool empty() const { return _dash ? false : _input.empty; }
+		@property char front() const {
+			if (_dash) return '-';
+
+			char r = cast(char)_input.front;
+			if (r >= 'A' && r <= 'Z') return cast(char)(r + ('a' - 'A'));
+			return r;
+		}
+
+		void popFront()
+		{
+			if (_dash) {
+				_dash = false;
+				return;
+			}
+
+			_input.popFront();
+			auto na = skipNonAlphaNum();
+			if (na && !_input.empty)
+				_dash = true;
+		}
+
+		private bool skipNonAlphaNum()
+		{
+			bool have_skipped = false;
+			while (!_input.empty) {
+				switch (_input.front) {
+					default:
+						_input.popFront();
+						have_skipped = true;
+						break;
+					case 'a': .. case 'z':
+					case 'A': .. case 'Z':
+					case '0': .. case '9':
+						return have_skipped;
+				}
+			}
+			return have_skipped;
+		}
+	}
+	return SlugRange(text);
+}
+
+unittest {
+	import std.algorithm : equal;
+	assert("".asSlug.equal(""));
+	assert(".,-".asSlug.equal(""));
+	assert("abc".asSlug.equal("abc"));
+	assert("aBc123".asSlug.equal("abc123"));
+	assert("....aBc...123...".asSlug.equal("abc-123"));
+}
+
 private struct LinkRef {
 	string id;
 	string url;
@@ -1130,8 +1267,8 @@ private struct Link {
 }
 
 @safe unittest { // check CTFE-ability
-    enum res = filterMarkdown("### some markdown\n[foo][]\n[foo]: /bar");
-    assert(res == "<h3> some markdown</h3>\n<p><a href=\"/bar\">foo</a>\n</p>\n", res);
+	enum res = filterMarkdown("### some markdown\n[foo][]\n[foo]: /bar");
+	assert(res == "<h3 id=\"some-markdown\"> some markdown</h3>\n<p><a href=\"/bar\">foo</a>\n</p>\n", res);
 }
 
 @safe unittest { // correct line breaks in restrictive mode
