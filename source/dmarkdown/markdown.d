@@ -817,7 +817,7 @@ pure @safe {
 		ret.open = false;
 		ln = ln[1 .. $];
 	}
-	if( !std.ascii.isAlpha(ln[1]) ) return ret;
+	if( !isAlpha(ln[1]) ) return ret;
 	ln = ln[1 .. $];
 	size_t idx = 0;
 	while( idx < ln.length && ln[idx] != ' ' && ln[idx] != '>' )
