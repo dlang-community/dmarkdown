@@ -27,17 +27,18 @@ import std.string;
 unittest
 {
 	auto text =
-	    "=======\n"
-	    "Heading\n"
-	    "=======\n"
-	    "\n"
-	    "**bold** *italic*\n"
-	    "\n"
-	    "List:\n"
-	    "\n"
-	    "  * a\n"
-	    "  * b\n"
-	    "  * c\n";
+`=======
+Heading
+=======
+
+**bold** *italic*
+
+List:
+
+  * a
+  * b
+  * c
+`;
 
 	import std.stdio;
 	writeln("===========");
@@ -60,7 +61,7 @@ unittest
 	assert(result == expected);
 }
 
-unittest 
+unittest
 {
     auto source = `*stars* under_score_s`;
     auto expectedUnderscores   = `<p><em>stars</em> under<em>score</em>s
@@ -73,7 +74,7 @@ unittest
     string resultUnderscores = filterMarkdown(source);
     string resultNoUnderscores = filterMarkdown(source, MarkdownFlags.disableUnderscoreEmphasis);
 
-    assert(resultUnderscores == expectedUnderscores, 
+    assert(resultUnderscores == expectedUnderscores,
            "'%s' != '%s'".format(resultUnderscores, expectedUnderscores));
     assert(resultNoUnderscores == expectedNoUnderscores,
            "'%s' != '%s'".format(resultNoUnderscores, expectedNoUnderscores));
@@ -182,17 +183,16 @@ final class MarkdownSettings {
 unittest
 {
 	auto text =
-	    "`inline code`\n"
-	    "block:\n"
-	    "\n"
-	    "    code block\n";
+"`inline code`" ~ `
+block:
+
+    code block
+`;
 	auto expected =
-	    "<p><code class=\"prettyprint\">AAAAAAAAAAA</code>\n"
-	    "block:\n"
-	    "</p>\n"
-	    "<pre class=\"prettyprint\"><code>"
-	    "AAAAAAAAAA"
-	    "</code></pre>";
+`<p><code class="prettyprint">AAAAAAAAAAA</code>
+block:
+</p>
+<pre class="prettyprint"><code>AAAAAAAAAA</code></pre>`;
 
 	import std.algorithm: filter;
 	string processCode(string input) @safe nothrow
@@ -594,7 +594,7 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 					dst.put("\n");
 				}
 			}
-			else 
+			else
 			{
 				auto temp = appender!string();
 				foreach(ln; block.text){
@@ -682,7 +682,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 					{
 						filterHTMLEscape(dst, code, HTMLEscapeFlags.escapeMinimal);
 					}
-					else 
+					else
 					{
 						auto temp = appender!string();
 						filterHTMLEscape(temp, code, HTMLEscapeFlags.escapeMinimal);
