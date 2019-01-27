@@ -1,2 +1,13 @@
 language: d
-sudo: false
+os:
+ - linux
+d:
+ - dmd
+ - ldc
+branches:
+  only:
+  - master
+  - /^v\d+\.\d+\.\d+([+-]\S*)*$/
+script:
+  - dub build --build=release --compiler=${DC}
+  - dub test --compiler=${DC}

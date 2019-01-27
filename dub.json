@@ -5,7 +5,7 @@
     "authors": ["Sönke Ludwig", "Martin Nowak", "Mike Wey", "cybevnm"],
     "importPaths": ["source"],
     "license": "MIT",
-    "homepage": "https://github.com/kiith-sa/dmarkdown",
+    "homepage": "https://github.com/dlang-community/dmarkdown",
 
     "buildTypes":
     {
