@@ -222,8 +222,10 @@ enum MarkdownFlags {
 	alternateSubheaders = 1 << 5,
 	/// If used, '_' may not be used for emphasis ('*' may still be used)
 	disableUnderscoreEmphasis = 1 << 6,
+	supportTables = 1 << 7,
 	vanillaMarkdown = none,
-	forumDefault = keepLineBreaks|backtickCodeBlocks|noInlineHtml
+	forumDefault = keepLineBreaks|backtickCodeBlocks|noInlineHtml,
+	githubInspired = backtickCodeBlocks|supportTables,
 }
 
 struct Section {
@@ -252,7 +254,8 @@ private enum LineType {
 	UList,
 	OList,
 	HtmlBlock,
-	CodeBlockDelimiter
+	CodeBlockDelimiter,
+	Table,
 }
 
 private struct Line {
@@ -291,26 +294,31 @@ pure @safe {
 		Line lninfo;
 		lninfo.text = ln;
 
-		while( ln.length > 0 ){
-			if( ln[0] == '\t' ){
-				lninfo.indent ~= IndentType.White;
-				ln.popFront();
-			} else if( ln.startsWith("    ") ){
-				lninfo.indent ~= IndentType.White;
-				ln.popFrontN(4);
-			} else {
-				ln = ln.stripLeft();
-				if( ln.startsWith(">") ){
-					lninfo.indent ~= IndentType.Quote;
+		void determineIndent() {
+			while( ln.length > 0 ){
+				if( ln[0] == '\t' ){
+					lninfo.indent ~= IndentType.White;
 					ln.popFront();
-				} else break;
+				} else if( ln.startsWith("    ") ){
+					lninfo.indent ~= IndentType.White;
+					ln.popFrontN(4);
+				} else {
+					ln = ln.stripLeft();
+					if( ln.startsWith(">") ){
+						lninfo.indent ~= IndentType.Quote;
+						ln.popFront();
+					} else break;
+				}
 			}
+			lninfo.unindented = ln;
 		}
-		lninfo.unindented = ln;
+
+		determineIndent();
 
 		if( (settings.flags & MarkdownFlags.backtickCodeBlocks) && isCodeBlockDelimiter(ln) ) lninfo.type = LineType.CodeBlockDelimiter;
 		else if( isAtxHeaderLine(ln) ) lninfo.type = LineType.AtxHeader;
 		else if( isSetextHeaderLine(ln, subHeaderChar) ) lninfo.type = LineType.SetextHeader;
+		else if( (settings.flags & MarkdownFlags.supportTables) && isTableRowLine!false(ln) ) lninfo.type = LineType.Table;
 		else if( isHlineLine(ln) ) lninfo.type = LineType.Hline;
 		else if( isOListLine(ln) ) lninfo.type = LineType.OList;
 		else if( isUListLine(ln) ) lninfo.type = LineType.UList;
@@ -332,7 +340,11 @@ private enum BlockType {
 	UList,
 	ListItem,
 	Code,
-	Quote
+	Quote,
+	Table,
+	TableRow,
+	TableHeader,
+	TableData,
 }
 
 private struct Block {
@@ -394,6 +406,10 @@ pure @safe {
 			}
 		} else {
 			Block b;
+			void processPlain() {
+				b.type = BlockType.Paragraph;
+				b.text = skipText(lines, base_indent);
+			}
 			final switch(ln.type){
 				case LineType.Undefined: assert(false);
 				case LineType.Blank: assert(false);
@@ -405,8 +421,7 @@ pure @safe {
 						b.headerLevel = setln.strip()[0] == '=' ? 1 : 2;
 						lines.popFrontN(2);
 					} else {
-						b.type = BlockType.Paragraph;
-						b.text = skipText(lines, base_indent);
+						processPlain();
 					}
 					break;
 				case LineType.Hline:
@@ -491,6 +506,38 @@ pure @safe {
 						lines.popFront();
 					}
 					break;
+				case LineType.Table:
+					lines.popFront();
+					// Can this be a valid table (is there a next line that could be a header separator)?
+					if (lines.empty) {
+						processPlain();
+						break;
+					}
+					Line lnNext = lines.front;
+					immutable bool isTableHeader = (
+						(lnNext.type == LineType.Table)
+						&& (lnNext.text.indexOf(" -") >= 0)
+						&& (lnNext.text.indexOf("- ") >= 0)
+						&& lnNext.text.allOf("-:| ")
+					);
+					if (!isTableHeader) {
+						// Not a valid table header, so let's assume it's plain markdown
+						processPlain();
+						break;
+					}
+					b.type = BlockType.Table;
+					// Parse header
+					b.blocks ~= ln.splitTableRow!(BlockType.TableHeader)();
+					// Parse table rows
+					lines.popFront();
+					while(!lines.empty) {
+						ln = lines.front;
+						if (ln.type != LineType.Table)
+							break; // not a table row, so let's assume it's the end of the table
+						b.blocks ~= ln.splitTableRow();
+						lines.popFront();
+					}
+					break;
 			}
 			root.blocks ~= b;
 		}
@@ -532,6 +579,25 @@ pure @safe {
 		if( lines.empty || !matchesIndent(lines.front.indent, indent) || lines.front.type != LineType.Plain )
 			return ret;
 	}
+}
+
+private Block splitTableRow(BlockType dataType = BlockType.TableData)(Line line)
+pure @safe {
+	static assert(dataType == BlockType.TableHeader || dataType == BlockType.TableData);
+
+	string ln = line.text.strip();
+	immutable size_t b = (ln[0..2] == "| ") ? 2 : 0;
+	immutable size_t e = (ln[($ - 2) .. $] == " |") ? (ln.length - 2) : ln.length;
+	Block ret;
+	ret.type = BlockType.TableRow;
+	foreach(txt; ln[b .. e].split(" | "))
+	{
+		Block d;
+		d.text = [txt.strip(" ")];
+		d.type = dataType;
+		ret.blocks ~= d;
+	}
+	return ret;
 }
 
 /// private
@@ -612,6 +678,36 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 				writeBlock(dst, b, links, settings);
 			dst.put("</blockquote>\n");
 			break;
+		case BlockType.Table:
+			assert(block.blocks.length > 0);
+			assert(block.blocks[0].type == BlockType.TableRow);
+			dst.put("<table>\n<tr>");
+			foreach(b; block.blocks[0].blocks) {
+				assert(b.type == BlockType.TableHeader);
+				dst.put("<th>");
+				writeMarkdownEscaped(dst, b.text[0], links, settings);
+				dst.put("</th>");
+			}
+			dst.put("</tr>\n");
+			if (block.blocks.length > 1) {
+				foreach(row; block.blocks[1 .. $]) {
+					assert(row.type == BlockType.TableRow);
+					dst.put("<tr>");
+					foreach(b; row.blocks) {
+						assert(b.type == BlockType.TableData);
+						dst.put("<td>");
+						writeMarkdownEscaped(dst, b.text[0], links, settings);
+						dst.put("</td>");
+					}
+					dst.put("</tr>\n");
+				}
+			}
+			dst.put("</table>\n");
+			break;
+		case BlockType.TableRow:
+		case BlockType.TableData:
+		case BlockType.TableHeader:
+			assert(0);
 	}
 }
 
@@ -846,6 +942,20 @@ pure @safe {
 	if( ln[1] != ' ' && ln[1] != '\t' )
 		return false;
 	return true;
+}
+
+private bool isTableRowLine(bool proper = false)(string ln)
+pure @safe {
+	static if (proper) {
+		return (
+			(ln.indexOf(" | ") >= 0)
+			&& !ln.isOListLine
+			&& !ln.isUListLine
+			&& !ln.isAtxHeaderLine
+		);
+	} else {
+		return (ln.indexOf(" | ") >= 0);
+	}
 }
 
 private string removeListPrefix(string str, LineType tp)
@@ -1295,3 +1405,34 @@ private struct Link {
 	assert(filterMarkdown(">     this\n    is code") ==
 		"<blockquote><pre><code>this\nis code</code></pre></blockquote>\n");
 }*/
+
+@safe unittest { // test simple border-less table
+	auto res = filterMarkdown(
+		"Col 1 | Col 2 | Col 3\n -- | -- | --\n val 1 | val 2 | val 3\n *val 4* | val 5 | value 6",
+		MarkdownFlags.supportTables
+	);
+	assert(res == "<table>\n<tr><th>Col 1</th><th>Col 2</th><th>Col 3</th></tr>\n<tr><td>val 1</td><td>val 2</td><td>val 3</td></tr>\n<tr><td><em>val 4</em></td><td>val 5</td><td>value 6</td></tr>\n</table>\n", res);
+}
+
+@safe unittest { // test simple border'ed table
+	auto res = filterMarkdown(
+		"| Col 1 | Col 2 | Col 3 |\n| -- | -- | -- |\n| val 1 | val 2 | val 3 |\n| *val 4* | val 5 | value 6 |",
+		MarkdownFlags.supportTables
+	);
+	assert(res == "<table>\n<tr><th>Col 1</th><th>Col 2</th><th>Col 3</th></tr>\n<tr><td>val 1</td><td>val 2</td><td>val 3</td></tr>\n<tr><td><em>val 4</em></td><td>val 5</td><td>value 6</td></tr>\n</table>\n", res);
+}
+
+@safe unittest {
+	import std.stdio;
+
+	string input = `
+Table:
+
+ID | Name  | Address
+ - | ----  | ---------
+ 1 | Foo   | Somewhere
+ 2 | Bar   | Nowhere `;
+	auto res = filterMarkdown(input, MarkdownFlags.supportTables);
+	writeln("==========", input, "=====", res);
+	assert(res == "<p>Table:\n</p>\n<table>\n<tr><th>ID</th><th>Name</th><th>Address</th></tr>\n<tr><td>1</td><td>Foo</td><td>Somewhere</td></tr>\n<tr><td>2</td><td>Bar</td><td>Nowhere</td></tr>\n</table>\n", res);
+}
