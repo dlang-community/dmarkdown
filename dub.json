@@ -11,6 +11,6 @@
     {
         "debug": { "buildOptions": ["debugMode", "debugInfoC"] },
         "release": { "buildOptions": ["releaseMode", "optimize", "inline", "noBoundsCheck"] },
-        "profile": { "buildOptions": ["releaseMode", "optimize", "noBoundsCheck", "debugInfoC"] },
-    },
+        "profile": { "buildOptions": ["releaseMode", "optimize", "noBoundsCheck", "debugInfoC"] }
+    }
 }
