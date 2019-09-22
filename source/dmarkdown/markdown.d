@@ -418,7 +418,7 @@ pure @safe {
 						auto setln = lines[1].unindented;
 						b.type = BlockType.Header;
 						b.text = [ln.unindented];
-						b.headerLevel = setln.strip()[0] == '=' ? 1 : 2;
+						b.headerLevel = setln.compatibleStrip()[0] == '=' ? 1 : 2;
 						lines.popFrontN(2);
 					} else {
 						processPlain();
@@ -585,7 +585,7 @@ private Block splitTableRow(BlockType dataType = BlockType.TableData)(Line line)
 pure @safe {
 	static assert(dataType == BlockType.TableHeader || dataType == BlockType.TableData);
 
-	string ln = line.text.strip();
+	string ln = line.text.compatibleStrip();
 	immutable size_t b = (ln[0..2] == "| ") ? 2 : 0;
 	immutable size_t e = (ln[($ - 2) .. $] == " |") ? (ln.length - 2) : ln.length;
 	Block ret;
@@ -593,7 +593,7 @@ pure @safe {
 	foreach(txt; ln[b .. e].split(" | "))
 	{
 		Block d;
-		d.text = [txt.strip(" ")];
+		d.text = [txt.compatibleStrip(" ")];
 		d.type = dataType;
 		ret.blocks ~= d;
 	}
@@ -984,7 +984,7 @@ pure @safe {
 	ret.isHtmlBlock = false;
 	ret.open = true;
 
-	ln = strip(ln);
+	ln = compatibleStrip(ln);
 	if( ln.length < 3 ) return ret;
 	if( ln[0] != '<' ) return ret;
 	if( ln[1] == '/' ){
@@ -1221,7 +1221,7 @@ pure @safe {
 	//   line must not be indented
 	foreach( lnidx, ln; lines ){
 		if( isLineIndented(ln) ) continue;
-		ln = strip(ln);
+		ln = compatibleStrip(ln);
 		if( !ln.startsWith("[") ) continue;
 		ln = ln[1 .. $];
 
@@ -1435,4 +1435,35 @@ ID | Name  | Address
 	auto res = filterMarkdown(input, MarkdownFlags.supportTables);
 	writeln("==========", input, "=====", res);
 	assert(res == "<p>Table:\n</p>\n<table>\n<tr><th>ID</th><th>Name</th><th>Address</th></tr>\n<tr><td>1</td><td>Foo</td><td>Somewhere</td></tr>\n<tr><td>2</td><td>Bar</td><td>Nowhere</td></tr>\n</table>\n", res);
+}
+
+static if (__VERSION__ >= 2079)
+{
+    alias compatibleStrip = std.string.strip;
+}
+else
+{
+    private string compatibleStrip(string str) pure @safe
+    {
+        return std.string.strip(str);
+    }
+
+    // This std.string.strip call wasn't existing until 2.079
+    private string compatibleStrip(string str, string chars) pure @safe
+    {
+        assert(chars == " "); // Not general, general case is trickier and requires Unicode decoding
+        size_t first = 0;
+        size_t last = str.length;
+        while(first < last && str[first] == ' ')
+            first++;
+        while(last > first && str[last-1] == ' ')
+            last--;
+        return str[first..last];
+    }
+
+    unittest
+    {
+        assert(" hi ".compatibleStrip(" ") == "hi");
+        assert("".compatibleStrip(" ") == "");
+    }
 }
